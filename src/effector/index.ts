@@ -3,6 +3,11 @@ import { Priority, PriorityJSON, Todo } from "../types/todos";
 import { JSON_SERVER_BASE_URL } from "../constants";
 import { getPriorityFromJSON } from "../utils/todo";
 
+enum TodoAddingError {
+  EMPTY_FIELD = "Пустое поле",
+  DUPLICATE_VALUE = "Это дело уже добавлено",
+}
+
 export const pageLoaded = createEvent<void>();
 export const todoUpdated = createEvent<Todo>();
 export const todoDeleted = createEvent<Todo>();
@@ -37,6 +42,8 @@ const deleteTodoFx = createEffect<Todo, void>(async (todo) => {
 });
 
 const addTodoFx = createEffect<Todo, void>(async (todo) => {
+  if ($error.getState()) return;
+  
   fetch(`${JSON_SERVER_BASE_URL}/todos`, {
     method: "POST",
     headers: {
@@ -74,6 +81,7 @@ export const $priorities = createStore<Priority[]>([]).on(
 );
 
 export const $todos = createStore<Todo[]>([]);
+export const $error = createStore<TodoAddingError | null>(null);
 
 $todos.on(getTodosFx.done, (_, { result }) => [...result]);
 
@@ -92,3 +100,13 @@ $todos.on(deleteTodoFx.done, (todos, { params }) =>
 );
 
 $todos.on(addTodoFx.done, (todos, { params }) => [...todos, params]);
+
+$error.on(todoAdded, (_, todo) => {
+  if (!todo.title || !todo.priorityId) return TodoAddingError.EMPTY_FIELD;
+
+  if ($todos.getState().find(
+    ({title}) => title.trim().toLowerCase() === todo.title.toLowerCase())
+  ) return TodoAddingError.DUPLICATE_VALUE;
+
+  return null;
+});
